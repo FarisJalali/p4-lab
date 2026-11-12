@@ -1,0 +1,82 @@
+C5 — Mixed Rollout Evaluation
+Student ID suffix: 1945
+
+Configuration:
+s1: tunnel.p4 (new, 5-byte tunnel header)
+s2: tunnel_v1.p4 (old, 4-byte tunnel header)
+
+Command:
+python3 topo.py --id 1945 --s2-program tunnel_v1.p4
+
+1. Delivery test
+
+Command:
+h1 python3 send.py 10.45.0.3 "mixed" --tunnel 2 --hops 8
+
+Result:
+Packet sent from h1-eth0.
+Neither receiver reported the message.
+
+2. Packet capture
+
+Command:
+h2 timeout 8 tcpdump -c 1 -XX -ni h2-eth0 ether proto 0x1212
+
+Packet captured at h2.
+
+Important bytes:
+0002 0745
+
+0002 = tunnel destination ID 2
+07 = hop limit after s1 forwarded
+45 = start of original IPv4 header
+
+The old switch interprets the new hop-limit byte
+as part of IPv4, causing a header-format mismatch.
+
+3. Mixed forwarding-loop test
+
+Command:
+sh ./p4cli s2 "table_modify MyIngress.myTunnel_exact MyIngress.myTunnel_forward 2 1"
+
+Command:
+h1 python3 send.py 10.45.0.3 "mixed loop" --tunnel 3 --hops 8
+
+First count:
+logs/s1.txt:1281
+logs/s2.txt:1277
+
+After 5 seconds:
+logs/s1.txt:1281
+logs/s2.txt:1277
+
+The counts remained unchanged, showing that
+the forwarding loop was no longer active.
+
+Original tcpdump capture:
+tcpdump: verbose output suppressed, use -v[v]... for full protocol decode
+listening on h2-eth0, link-type EN10MB (Ethernet), snapshot length 262144 bytes
+07:53:40.461777 00:00:00:00:00:01 > ff:ff:ff:ff:ff:ff, ethertype Unknown (0x1212), length 60: 
+	0x0000:  ffff ffff ffff 0000 0000 0001 1212 0800  ................
+	0x0010:  0002 0745 0000 2900 0100 0040 0d66 660a  ...E..)....@.ff.
+	0x0020:  2d00 010a 2d00 0310 e110 e100 15d1 6c6d  -...-.........lm
+	0x0030:  6978 6564 2063 6170 7475 7265            ixed.capture
+1 packet captured
+1 packet received by filter
+0 packets dropped by kernel
+
+Relevant s1 hop-limit logs:
+52496:[07:53:26.206] [bmv2] [T] [thread 13392] [0.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52545:[07:53:40.460] [bmv2] [T] [thread 13392] [1.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52594:[07:54:22.095] [bmv2] [T] [thread 13392] [2.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52643:[07:54:22.098] [bmv2] [T] [thread 13392] [3.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52692:[07:54:22.101] [bmv2] [T] [thread 13392] [4.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52741:[07:54:22.104] [bmv2] [T] [thread 13392] [5.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52790:[07:54:22.106] [bmv2] [T] [thread 13392] [6.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52839:[07:54:22.110] [bmv2] [T] [thread 13392] [7.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52888:[07:54:22.113] [bmv2] [T] [thread 13392] [8.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is false
+52937:[07:54:22.115] [bmv2] [T] [thread 13392] [9.0] [cxt 0] tunnel.p4(125) Condition "hdr.myTunnel.hop_limit <= 1" (node_3) is true
+
+Relevant s1 drop logs:
+51484:[07:29:56.259] [bmv2] [D] [thread 1810] [0.0] [cxt 0] Dropping packet at the end of ingress
+52947:[07:54:22.116] [bmv2] [D] [thread 13392] [9.0] [cxt 0] Dropping packet at the end of ingress

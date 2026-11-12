@@ -23,8 +23,9 @@ header ethernet_t {
 }
 
 header myTunnel_t {
-    bit<16> proto_id;   // what follows the tunnel header, like etherType (0x0800: IPv4)
-    bit<16> dst_id;     // which tunnel exit to deliver to: 1 = h1, 2 = h2, 3 = h3
+    bit<16> proto_id;
+    bit<16> dst_id;
+    bit<8>  hop_limit;
 }
 
 header ipv4_t {
@@ -58,15 +59,21 @@ parser MyParser(packet_in packet,
                 inout standard_metadata_t standard_metadata) {
 
     state start {
-        packet.extract(hdr.ethernet);
-        transition select(hdr.ethernet.etherType) {
-            TYPE_IPV4: parse_ipv4;
-            // TODO (Step 4): send TYPE_MYTUNNEL packets to a parse_myTunnel state
-            default: accept;
-        }
+    packet.extract(hdr.ethernet);
+    transition select(hdr.ethernet.etherType) {
+        TYPE_IPV4: parse_ipv4;
+        TYPE_MYTUNNEL: parse_myTunnel;
+        default: accept;
     }
+}
 
-    // TODO (Step 4): add the parse_myTunnel state here
+    state parse_myTunnel {
+    packet.extract(hdr.myTunnel);
+    transition select(hdr.myTunnel.proto_id) {
+        TYPE_IPV4: parse_ipv4;
+        default: accept;
+    }
+}
 
     state parse_ipv4 {
         packet.extract(hdr.ipv4);
@@ -113,14 +120,21 @@ control MyIngress(inout headers hdr,
         default_action = drop();
     }
 
-    apply {
-        // TODO (Step 5): tunnelled packets should use myTunnel_exact instead
-        if (hdr.ipv4.isValid()) {
-            ipv4_lpm.apply();
-        } else {
+        apply {
+    if (hdr.myTunnel.isValid()) {
+        if (hdr.myTunnel.hop_limit <= 1) {
             drop();
+        } else {
+            hdr.myTunnel.hop_limit =
+                hdr.myTunnel.hop_limit - 1;
+            myTunnel_exact.apply();
         }
+    } else if (hdr.ipv4.isValid()) {
+        ipv4_lpm.apply();
+    } else {
+        drop();
     }
+}
 }
 
 /*************************** EGRESS ***************************/
@@ -151,7 +165,7 @@ control MyComputeChecksum(inout headers hdr, inout metadata meta) {
 control MyDeparser(packet_out packet, in headers hdr) {
     apply {
         packet.emit(hdr.ethernet);
-        // TODO (Step 4): emit the tunnel header (only valid headers are written)
+        packet.emit(hdr.myTunnel);
         packet.emit(hdr.ipv4);
     }
 }
