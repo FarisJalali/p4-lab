@@ -1,0 +1,13 @@
+Listening on h2-eth0...
+Received (tunnelled, dst_id=2, hop_limit=2) from 10.45.0.1 to 10.45.0.3, TTL 64: 'hello'
+Received (tunnelled, dst_id=2, hop_limit=6) from 10.45.0.1 to 10.45.0.3, TTL 64: 'delivery h2'
+Received (tunnelled, dst_id=2, hop_limit=6) from 10.45.0.1 to 10.45.0.3, TTL 64: 'delivery h2'
+Listening on h3-eth0...
+Received (tunnelled, dst_id=3, hop_limit=6) from 10.45.0.1 to 10.45.0.3, TTL 64: 'delivery h3'
+Received (tunnelled, dst_id=3, hop_limit=6) from 10.45.0.1 to 10.45.0.3, TTL 64: 'delivery h3'
+
+IPv4 test: h1 ping -c 2 h3
+2 packets transmitted, 2 received, 0% packet loss
+
+Low-hop test: h1 python3 send.py 10.45.0.3 "low hops" --tunnel 2 --hops 2
+No low hops message appeared in either receiver log.

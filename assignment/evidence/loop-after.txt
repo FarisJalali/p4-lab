@@ -1,0 +1,69 @@
+C4 — Forwarding Loop After Hop Limit Implementation
+Student ID suffix: 1945
+IP destination: 10.45.0.3
+Tunnel destination ID: 3
+Initial hop limit: 8
+
+1. Configure forwarding loop
+
+Command:
+sh ./p4cli s2 "table_modify MyIngress.myTunnel_exact MyIngress.myTunnel_forward 2 1"
+
+Result:
+Modifying entry 2 for exact match table MyIngress.myTunnel_exact
+
+2. Send tunnelled packet
+
+Command:
+h1 python3 send.py 10.45.0.3 "loop after" --tunnel 3 --hops 8
+
+Result:
+Packet sent successfully from h1-eth0.
+
+3. Verify loop termination
+
+First count:
+logs/s1.txt:1271
+logs/s2.txt:1268
+
+After another 5 seconds:
+logs/s1.txt:1271
+logs/s2.txt:1268
+
+The counts remained unchanged during the second measurement.
+
+4. Switch log evidence
+
+Switch: s2
+
+Condition "hdr.myTunnel.hop_limit <= 1" is true
+Action MyIngress.drop
+Dropping packet at the end of ingress
+
+5. Analysis
+
+The initial hop limit was 8.
+
+Expected forwarding sequence:
+Visit 1: s1, 8 -> 7
+Visit 2: s2, 7 -> 6
+Visit 3: s1, 6 -> 5
+Visit 4: s2, 5 -> 4
+Visit 5: s1, 4 -> 3
+Visit 6: s2, 3 -> 2
+Visit 7: s1, 2 -> 1
+Visit 8: s2, packet dropped
+
+The expected result is 7 forwarding operations followed
+by a drop on the 8th switch visit.
+
+The switch logs confirm that the hop-limit condition
+triggered a drop at s2.
+
+Conclusion:
+The new hop-limit mechanism successfully prevents
+the forwarding loop from continuing indefinitely.
+
+Original s2 drop-log entries:
+52029:[07:40:43.884] [bmv2] [T] [thread 6013] [9.0] [cxt 0] Action MyIngress.drop
+52265:[07:42:21.281] [bmv2] [T] [thread 8222] [3.0] [cxt 0] Action MyIngress.drop

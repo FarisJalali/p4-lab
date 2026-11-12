@@ -1,0 +1,20 @@
+C1 — Tunnel Forwarding Loop (Before Hop Limit)
+Student ID suffix: 1945 (NN=45)
+
+Command: sh ./p4cli s2 "table_modify MyIngress.myTunnel_exact MyIngress.myTunnel_forward 2 1"
+Result: Modifying entry 2 for exact match table MyIngress.myTunnel_exact
+
+Command: h1 python3 send.py 10.45.0.3 "loop" --tunnel 3
+Result: Sent from h1-eth0, dst_id=3, TTL=64
+
+First count:
+logs/s1.txt:504
+logs/s2.txt:502
+
+After 5 seconds:
+logs/s1.txt:671
+logs/s2.txt:669
+
+Increase: 167 packets per switch
+
+Conclusion: The tunnel forwarding loop persists without a hop limit.
